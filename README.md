@@ -1,67 +1,71 @@
 # 高 QPS 網路爬蟲系統
 
-這是一個高效能的分散式網路爬蟲系統，目標是達到 **每秒 10,000 次查詢 (QPS)**，適合大規模網頁抓取。本倉庫只放核心程式碼，使用 **Laravel**、**FastAPI**、**gRPC**、**Redis**、**Celery** 和 **PostgreSQL/MongoDB** 打造，模組化且可擴展，支援反爬蟲和監控功能。
+這是一個專為大規模網頁抓取設計的 **高性能分散式爬蟲系統**，目標實現 **每秒 10,000 次查詢 (QPS)**，兼顧穩定性、可擴展性和反爬蟲能力。本倉庫提供核心程式碼，基於 **Laravel**、**FastAPI**、**gRPC**、**Redis**、**Celery** 和 **PostgreSQL/MongoDB** 打造，展現模組化設計、高效通信和生產級部署能力。系統整合了 **Prometheus**、**Grafana** 和 **Celery Flower** 監控，確保性能透明。
 
----
+**亮點**：
+- **極致性能**：單節點支援 1,600-4,000 QPS，水平擴展可達 10,000 QPS。
+- **反爬蟲**：動態代理池、隨機 User-Agent 和 2Captcha 支援，規避封鎖。
+- **分散式架構**：gRPC 高效通信，Redis 任務佇列，Celery 高並發處理。
+- **監控與調優**：實時指標可視化，支援壓力測試與效能優化。
 
-## 🚀 專案簡介
-
-這個專案是為了解決高吞吐量網頁抓取的需求，核心程式碼展示如何用分散式架構實現高效爬蟲。主要特色：
-
-- **高性能**：支援 10,000 QPS，靠 Docker Compose 輕鬆擴展。
-- **模組化**：分成 Laravel API、FastAPI 爬蟲、Redis 佇列和 Celery 資料處理。
-- **反爬蟲**：有代理池、隨機 User-Agent 和 2Captcha 支援。
-- **監控**：整合 Prometheus、Grafana 和 Celery Flower，方便追蹤效能。
-
-**注意**：倉庫只包含核心程式碼，Laravel 環境得自己裝。
+**注意**：本倉庫僅含核心程式碼，Laravel 基礎環境需自行安裝。
 
 ---
 
 ## 🛠️ 系統架構
 
-系統架構簡單明瞭：
+系統採用模組化分散式設計，核心組件協同實現高 QPS：
 
 1. **Laravel API** (`laravel_api/`)：
-   - 負責任務提交和狀態查詢，透過 gRPC 跟 FastAPI 溝通。
-   - 任務狀態存在 Redis，歷史資料進 PostgreSQL 或 MongoDB。
+   - 提供 REST 端點 (`/api/submit-crawl`, `/api/crawl-status/{task_id}`) 管理任務。
+   - 使用 **gRPC** 與 FastAPI 通信，效率高於 REST。
+   - 任務狀態存於 **Redis**，歷史資料進 **PostgreSQL** 或 **MongoDB**。
 
 2. **FastAPI 爬蟲核心** (`fastapi_crawler/`)：
-   - 用 `aiohttp` 和 `httpx` 抓網頁，支援代理池和反爬蟲策略。
-   - 提供 gRPC 服務和 REST 端點。
+   - 基於 `aiohttp` 和 `httpx` 的非同步 HTTP 請求，支援高並發爬取。
+   - 實現代理池管理和反爬蟲策略（User-Agent 隨機化、隨機延遲）。
+   - 提供 gRPC 服務 (`app/grpc_server.py`) 和 REST 健康檢查端點 (`main.py`)。
 
 3. **Celery 工作節點** (`celery_workers/`)：
-   - 處理抓回來的資料，支援高並發儲存。
+   - 使用 `gevent` 模式，每節點支援 300 並發任務，處理資料儲存。
+   - 支援 **PostgreSQL**（搭配 PgBouncer 連線池）或 **MongoDB**。
 
-4. **Redis**：管任務佇列、代理池和 URL 去重。
-5. **PostgreSQL/MongoDB**：預設 PostgreSQL，可換 MongoDB。
-6. **監控**：Prometheus、Grafana 和 Celery Flower。
+4. **Redis**：
+   - 作為任務佇列（Celery）、代理池和 URL 去重儲存。
+   - 配置主從複製，確保高可用性。
+
+5. **監控系統**：
+   - **Prometheus**：收集 QPS、延遲、代理池大小等指標。
+   - **Grafana**：可視化效能儀表板。
+   - **Celery Flower**：即時監控任務執行。
+   - **ELK Stack**（可選）：集中式日誌分析。
 
 ---
 
 ## 📋 環境需求
 
-- **Docker** 和 **Docker Compose**：跑容器化服務。
-- **Laravel 環境**：PHP 8.2+、Composer（自己裝）。
+- **Docker** 和 **Docker Compose**：容器化部署。
+- **Laravel 環境**：PHP 8.2+、Composer（需自行安裝）。
 - **硬體建議**（10,000 QPS）：
-  - CPU：32-64 核心。
+  - CPU：32-64 核心（例：AWS c6i.16xlarge）。
   - 記憶體：128-256 GB。
   - 網路：10 Gbps。
   - 儲存：NVMe SSD（1-2 TB）。
-- **代理 API**：像 98IP 或 BrightData 這種可靠的代理服務。
-- **2Captcha API 金鑰**（可選）：解 CAPTCHA 用。
+- **代理 API**：可靠提供商（如 98IP、BrightData）。
+- **2Captcha API 金鑰**（可選）：解 CAPTCHA。
 
 ---
 
-## 🏗️ 怎麼跑起來
+## 🏗️ 快速部署
 
-1. **抓程式碼**：
+1. **克隆程式碼**：
    ```bash
    git clone https://github.com/BpsEason/high_qps_crawler.git
    cd high_qps_crawler
    ```
 
-2. **裝 Laravel 環境**：
-   - 進 `laravel_api/` 目錄：
+2. **安裝 Laravel 環境**：
+   - 進入 `laravel_api/`：
      ```bash
      cd laravel_api
      composer install
@@ -69,14 +73,14 @@
      php artisan key:generate
      ```
 
-3. **設環境變數**：
-   - 在 `fastapi_crawler/.env`：
+3. **配置環境變數**：
+   - `fastapi_crawler/.env`：
      ```env
      CAPTCHA_API_KEY=你的_2captcha_api_金鑰  # 可選
-     PROXY_API_URL=https://api.your-proxy-provider.com/get-proxies  # 換成真實代理 API
+     PROXY_API_URL=https://api.your-proxy-provider.com/get-proxies  # 真實代理 API
      PROXY_UPDATE_INTERVAL_SECONDS=3600
      ```
-   - 在 `laravel_api/.env`：
+   - `laravel_api/.env`：
      ```env
      DB_CONNECTION=pgsql
      DB_HOST=pgbouncer
@@ -89,9 +93,9 @@
      FASTAPI_GRPC_HOST=fastapi_crawler:50051
      ```
 
-4. **選資料庫**：
-   - 預設用 **PostgreSQL**（有 PgBouncer 連線池）。
-   - 想用 **MongoDB**，改 `docker-compose.yml` 和 `laravel_api/.env`：
+4. **選擇資料庫**：
+   - 預設：**PostgreSQL**（搭配 PgBouncer）。
+   - 用 **MongoDB**：改 `docker-compose.yml` 和 `laravel_api/.env`：
      ```env
      DB_CONNECTION=mongodb
      DB_HOST=mongodb
@@ -100,7 +104,7 @@
      MONGODB_URL=mongodb://mongodb:27017
      ```
 
-5. **建置並啟動服務**：
+5. **啟動服務**：
    ```bash
    docker compose build
    docker compose up -d
@@ -111,28 +115,28 @@
    docker compose exec laravel php artisan migrate
    ```
 
-7. **擴展 Celery 工作節點**：
+7. **擴展 Celery**：
    ```bash
    docker compose up -d --scale celery_worker=10
    ```
 
-8. **試跑爬蟲**：
-   - 丟個任務：
+8. **測試爬蟲**：
+   - 提交任務：
      ```bash
      curl -X POST -H "Content-Type: application/json" -d '{"url": "http://example.com"}' http://localhost:8000/api/submit-crawl
      ```
-   - 查任務狀態：
+   - 查狀態：
      ```bash
      curl http://localhost:8000/api/crawl-status/{task_id}
      ```
 
 ---
 
-## 🔑 核心程式碼與中文註解
+## 🔑 核心程式碼與技術亮點
 
-以下是專案的關鍵程式碼，帶中文註解，展示主要功能：
+以下展示核心程式碼，搭配中文註解，突出技術含量：
 
-### 1. Laravel API - 任務提交 (`laravel_api/app/Http/Controllers/CrawlerController.php`)
+### 1. Laravel API - 高效任務分派 (`laravel_api/app/Http/Controllers/CrawlerController.php`)
 
 ```php
 <?php
@@ -147,59 +151,62 @@ use Illuminate\Support\Facades\Redis;
 class CrawlerController extends Controller
 {
     /**
-     * 把爬取任務丟給 FastAPI（用 gRPC）
+     * 提交爬取任務，透過 gRPC 與 FastAPI 高效通信
      */
     public function submitCrawlTask(Request $request)
     {
-        // 檢查 URL 格式
+        // 驗證 URL 格式，確保輸入安全
         $request->validate(['url' => 'required|url']);
         $url = $request->input('url');
-        $taskId = uniqid('crawl_'); // 產生唯一任務 ID
+        $taskId = uniqid('crawl_'); // 生成唯一任務 ID，支援高並發
 
         try {
-            // 連 FastAPI 的 gRPC 服務
+            // 初始化 gRPC 客戶端，使用 HTTP/2 高效傳輸
             $client = new CrawlerServiceClient(env('FASTAPI_GRPC_HOST', 'fastapi_crawler:50051'), [
                 'credentials' => ChannelCredentials::createInsecure(),
             ]);
             
-            // 包裝 gRPC 請求
+            // 構建 gRPC 請求，Protocol Buffers 確保資料結構嚴謹
             $requestProto = new \Crawler\CrawlRequest();
             $requestProto->setUrl($url);
             $requestProto->setTaskId($taskId);
 
-            // 送出請求
+            // 發送 gRPC 請求，低延遲高吞吐
             list($response, $status) = $client->Crawl($requestProto)->wait();
             if ($status->code !== \Grpc\STATUS_OK) {
-                throw new \Exception("gRPC 失敗: " . $status->details);
+                throw new \Exception("gRPC 通信失敗: " . $status->details);
             }
 
-            // 存任務狀態到 Redis
+            // 儲存任務狀態至 Redis，支援即時查詢與高並發
             Redis::hset("crawl_task_status:{$taskId}", "status", "dispatched");
             Redis::hset("crawl_task_status:{$taskId}", "url", $url);
             Redis::hset("crawl_task_status:{$taskId}", "dispatched_at", now()->toIso8601String());
 
-            Log::info("gRPC 成功，URL: $url, 任務 ID: $taskId");
+            Log::info("任務分派成功，URL: $url, 任務 ID: $taskId");
             return response()->json([
-                'message' => '任務送出',
+                'message' => '任務已分派至爬蟲核心',
                 'task_id' => $taskId,
-                'grpc_response_status' => $response->getStatus(),
+                'grpc_status' => $response->getStatus(),
             ]);
         } catch (\Exception $e) {
-            // 出錯就記 log，更新 Redis 狀態
-            Log::error("送任務失敗，URL: $url. 錯誤: " . $e->getMessage());
+            // 異常處理，記錄錯誤並更新 Redis 狀態
+            Log::error("任務分派失敗，URL: $url, 錯誤: " . $e->getMessage());
             Redis::hset("crawl_task_status:{$taskId}", "status", "submission_failed");
             Redis::hset("crawl_task_status:{$taskId}", "error", $e->getMessage());
-            return response()->json(['error' => '送任務失敗: ' . $e->getMessage()], 500);
+            return response()->json(['error' => '分派失敗: ' . $e->getMessage()], 500);
         }
     }
 }
 ```
 
-**說明**：這段程式碼負責把爬取任務丟給 FastAPI，用 gRPC 通信，任務狀態存到 Redis，方便即時查詢。
+**技術亮點**：
+- **gRPC 通信**：比 REST 快 2-10 倍，適合高頻任務分派。
+- **Redis 狀態管理**：用 Hash 結構存任務狀態，支援 O(1) 查詢。
+- **異常處理**：確保系統穩定，錯誤即時記錄。
 
 ---
 
-### 2. FastAPI 爬蟲核心 - 抓網頁 (`fastapi_crawler/app/crawler.py`)
+### 2. FastAPI 爬蟲核心 - 非同步高並發爬取 (`fastapi_crawler/app/crawler.py`)
 
 ```python
 import aiohttp
@@ -214,43 +221,43 @@ REDIS_HOST = os.getenv("REDIS_HOST", "redis")
 REDIS_PORT = int(os.getenv("REDIS_PORT", 6379))
 
 async def get_redis_client():
-    """連 Redis，拿代理或去重"""
+    """初始化 Redis 連線，支援代理池和 URL 去重"""
     global _redis_client
     if _redis_client is None:
         _redis_client = await aioredis.from_url(f"redis://{REDIS_HOST}:{REDIS_PORT}")
     return _redis_client
 
 async def get_proxy():
-    """從 Redis 抓個好用的代理"""
+    """從 Redis 動態代理池選取健康代理，確保高可用性"""
     client = await get_redis_client()
     try:
         proxies_bytes = await client.smembers("proxy_pool")
         if not proxies_bytes:
-            print("沒代理，直接連")
+            print("代理池空，改用直連")
             return None
         proxies = [p.decode('utf-8') for p in proxies_bytes]
-        random.shuffle(proxies)
+        random.shuffle(proxies)  # 隨機選擇，分散請求壓力
         for proxy in proxies:
             try:
                 async with httpx.AsyncClient(proxies={'http://': proxy, 'https://': proxy}, timeout=5) as test_client:
                     response = await test_client.get("http://httpbin.org/ip")
                     response.raise_for_status()
-                print(f"用這個代理: {proxy}")
+                print(f"選用代理: {proxy}")
                 return proxy
             except (httpx.RequestError, httpx.HTTPStatusError) as e:
-                print(f"代理 {proxy} 壞了: {e}")
+                print(f"代理 {proxy} 無效: {e}，移除")
                 await client.srem("proxy_pool", proxy)
-        print("沒好代理")
+        print("無有效代理，改用直連")
         return None
     except Exception as e:
-        print(f"抓代理失敗: {e}")
+        print(f"獲取代理失敗: {e}")
         return None
 
 async def perform_crawl(url: str, task_id: str) -> str:
-    """抓網頁內容"""
-    user_agent = UserAgent().random  # 隨機換 User-Agent
-    proxy = await get_proxy()  # 拿代理
-    await asyncio.sleep(random.uniform(0.1, 1.0))  # 隨機等一下，躲反爬
+    """非同步爬取網頁，支援反爬蟲策略"""
+    user_agent = UserAgent().random  # 隨機 User-Agent，降低封鎖風險
+    proxy = await get_proxy()  # 動態選擇代理
+    await asyncio.sleep(random.uniform(0.1, 1.0))  # 隨機延遲，模擬人類行為
 
     headers = {
         'User-Agent': user_agent,
@@ -260,24 +267,28 @@ async def perform_crawl(url: str, task_id: str) -> str:
     async with httpx.AsyncClient(headers=headers, proxies={'http://': proxy, 'https://': proxy} if proxy else None, 
                                  timeout=30, follow_redirects=True) as client:
         try:
-            print(f"抓: {url} (任務 ID: {task_id})")
+            print(f"開始爬取: {url} (任務 ID: {task_id})")
             response = await client.get(url)
             response.raise_for_status()
             redis_client = await get_redis_client()
-            await redis_client.sadd("crawled_urls", url)  # 記住抓過的 URL
+            await redis_client.sadd("crawled_urls", url)  # URL 去重，防止重複爬取
             return response.text
         except httpx.HTTPStatusError as e:
-            print(f"抓失敗，狀態碼 {e.response.status_code}: {e}")
+            print(f"爬取失敗，狀態碼 {e.response.status_code}: {e}")
             if e.response.status_code in [403, 429]:
-                print("可能有 CAPTCHA")
+                print("檢測到反爬，可能需 CAPTCHA 解決")
+                # 預留 2Captcha 處理邏輯
             raise
 ```
 
-**說明**：這段程式碼用非同步方式抓網頁，支援代理和隨機 User-Agent，還有 URL 去重，預留了 CAPTCHA 處理空間。
+**技術亮點**：
+- **非同步 I/O**：`httpx.AsyncClient` 支援高並發，單節點可處理數千 QPS。
+- **動態代理池**：Redis 儲存並檢查代理健康，自動剔除無效代理。
+- **反爬策略**：隨機延遲 (0.1-1.0 秒)、User-Agent 隨機化，預留 CAPTCHA 處理。
 
 ---
 
-### 3. Celery 工作節點 - 存資料 (`celery_workers/app/tasks.py`)
+### 3. Celery 工作節點 - 高並發資料儲存 (`celery_workers/app/tasks.py`)
 
 ```python
 from celery_app import app
@@ -292,22 +303,22 @@ REDIS_HOST = os.getenv("REDIS_HOST", "redis")
 REDIS_PORT = int(os.getenv("REDIS_PORT", 6379))
 
 async def get_redis_client():
-    """連 Redis，更新任務狀態"""
+    """初始化 Redis 連線，更新任務狀態"""
     return await aioredis.from_url(f"redis://{REDIS_HOST}:{REDIS_PORT}")
 
 async def get_pg_pool():
-    """拿 PostgreSQL 連線池"""
+    """建立 PostgreSQL 連線池，支援高並發寫入"""
     global _pg_pool
     if _pg_pool is None:
         if POSTGRES_URL:
             _pg_pool = await asyncpg.create_pool(POSTGRES_URL, min_size=10, max_size=50)
         else:
-            raise ValueError("沒設 POSTGRES_URL")
+            raise ValueError("未設置 POSTGRES_URL")
     return _pg_pool
 
 @app.task(name='tasks.store_data', bind=True, default_retry_delay=300, max_retries=5)
 def store_data_task(self, url: str, content: str, task_id: str = None):
-    """把抓到的資料存起來"""
+    """高效儲存爬取資料，支援失敗重試"""
     print(f"處理 URL: {url} (任務 ID: {task_id})")
     redis_client_sync = asyncio.run(get_redis_client())
     try:
@@ -320,64 +331,69 @@ def store_data_task(self, url: str, content: str, task_id: str = None):
             "metadata": {}
         }]
 
+        # 批量儲存，減少資料庫壓力
         asyncio.run(_store_data_async(data_to_store))
         
+        # 更新 Redis 任務狀態
         asyncio.run(redis_client_sync.hset(f"crawl_task_status:{task_id}", mapping={
             "status": "completed",
             "completed_at": datetime.datetime.now().isoformat()
         }))
-        print(f"存好: {url}")
-        return f"存好: {url}"
+        print(f"儲存成功: {url}")
+        return f"儲存成功: {url}"
     except Exception as e:
-        print(f"存失敗: {url}, 錯誤: {e}")
+        print(f"儲存失敗: {url}, 錯誤: {e}")
+        # 記錄失敗狀態，支援除錯
         asyncio.run(redis_client_sync.hset(f"crawl_task_status:{task_id}", mapping={
             "status": "failed",
             "error": str(e),
             "completed_at": datetime.datetime.now().isoformat()
         }))
-        raise self.retry(exc=e)
+        raise self.retry(exc=e)  # 自動重試，最多 5 次
     finally:
         asyncio.run(redis_client_sync.close())
 
 async def _store_data_async(data_items: list):
-    """非同步存到 PostgreSQL"""
-    if POSTGRES_URL:
-        pool = await get_pg_pool()
-        async with pool.acquire() as conn:
-            await conn.executemany('''
-                INSERT INTO crawled_data(url, content, crawled_at, title, metadata, task_id)
-                VALUES($1, $2, $3, $4, $5::jsonb, $6)
-                ON CONFLICT (url) DO UPDATE
-                SET content = EXCLUDED.content, crawled_at = EXCLUDED.crawled_at,
-                    title = EXCLUDED.title, metadata = EXCLUDED.metadata,
-                    updated_at = NOW();
-            ''', [(item['url'], item['content'], item['crawled_at'], item.get('title', ''),
-                   item.get('metadata', {}), item['task_id']) for item in data_items])
-        print(f"存了 {len(data_items)} 條資料")
+    """非同步批量寫入 PostgreSQL，優化性能"""
+    pool = await get_pg_pool()
+    async with pool.acquire() as conn:
+        await conn.executemany('''
+            INSERT INTO crawled_data(url, content, crawled_at, title, metadata, task_id)
+            VALUES($1, $2, $3, $4, $5::jsonb, $6)
+            ON CONFLICT (url) DO UPDATE
+            SET content = EXCLUDED.content, crawled_at = EXCLUDED.crawled_at,
+                title = EXCLUDED.title, metadata = EXCLUDED.metadata,
+                updated_at = NOW();
+        ''', [(item['url'], item['content'], item['crawled_at'], item.get('title', ''),
+               item.get('metadata', {}), item['task_id']) for item in data_items])
+    print(f"批量寫入 {len(data_items)} 條資料")
 ```
 
-**說明**：這段程式碼把抓到的資料存到 PostgreSQL，用連線池和批量插入提高效率，同時更新 Redis 的任務狀態。
+**技術亮點**：
+- **連線池**：`asyncpg` 搭配 PgBouncer，支援高並發寫入（10-50 連線）。
+- **批量插入**：`executemany` 減少 SQL 執行次數，提升效率。
+- **失敗重試**：Celery 自動重試，搭配 Redis 狀態追蹤，確保穩定性。
 
 ---
 
 ## ❓ 常見問題與解答
 
-以下是一些開發者可能會問的問題，結合專案程式碼和設計，幫你快速上手或解決疑惑。
+以下是開發者可能關心的問題，搭配程式碼和技術細節，讓你快速掌握專案精髓。
 
-### Q1: 怎麼讓這系統跑出高 QPS？
+### Q1: 怎麼讓這系統跑到 10,000 QPS？
 
-這專案用分散式架構，靠多個組件分工來撐高 QPS。Laravel 管任務分派，FastAPI 負責抓網頁，Celery 處理資料儲存，Redis 當中間人。關鍵是：
+這系統用分散式架構，靠 **Laravel** 分派任務、**FastAPI** 非同步爬取、**Celery** 處理資料，搭配 **Redis** 管理佇列和代理。核心設計：
 
-- **非同步爬取**：FastAPI 用 `aiohttp` 和 `httpx` 跑非同步請求，單節點能到 1,600-4,000 QPS。
-- **分散式處理**：Celery 用 `gevent` 模式，每個 worker 跑 300 個任務。
-- **擴展**：用 `docker compose up -d --scale celery_worker=10` 開多個 worker。
+- **非同步爬取**：FastAPI 的 `perform_crawl` 用 `httpx.AsyncClient`，單節點可達 1,600-4,000 QPS。
+- **分散式處理**：Celery 用 `gevent` 模式，每 worker 跑 300 任務，支援高並發。
+- **水平擴展**：用 `docker compose up -d --scale celery_worker=10` 開多節點。
 
 **程式碼**（`fastapi_crawler/app/crawler.py`）：
 ```python
 async def perform_crawl(url: str, task_id: str) -> str:
     user_agent = UserAgent().random
     proxy = await get_proxy()
-    await asyncio.sleep(random.uniform(0.1, 1.0))  # 隨機延遲
+    await asyncio.sleep(random.uniform(0.1, 1.0))
     headers = {'User-Agent': user_agent, ...}
     async with httpx.AsyncClient(headers=headers, proxies={'http://': proxy} if proxy else None,
                                  timeout=30, follow_redirects=True) as client:
@@ -388,19 +404,29 @@ async def perform_crawl(url: str, task_id: str) -> str:
         return response.text
 ```
 
-**小訣竅**：
-- 設真實的 `PROXY_API_URL`（像 98IP），保持 100-200 個代理。
-- 開多點 FastAPI worker：`gunicorn -w 16`。
-- 用 Locust 測 QPS：
+**怎麼跑更快**：
+- 用真實代理 API（如 98IP），保持 100-200 個健康代理。
+- 調 FastAPI worker：`gunicorn -k uvicorn.workers.UvicornWorker -w 16`。
+- 用 Locust 測效能：
+  ```python
+  # locustfile.py
+  from locust import HttpUser, task, between
+  class CrawlerUser(HttpUser):
+      wait_time = between(0.1, 0.5)
+      host = "http://localhost:8000"
+      @task
+      def submit_crawl(self):
+          self.client.post("/api/submit-crawl", json={"url": "http://example.com"})
+  ```
   ```bash
   locust -f locustfile.py
   ```
 
 ---
 
-### Q2: 資料庫怎麼扛高並發？
+### Q2: 資料庫怎麼撐高並發？
 
-專案用 **PostgreSQL** 配 **PgBouncer** 連線池，Celery 透過 `asyncpg` 批量寫資料，減少連線負擔。如果選 MongoDB，則靠它的靈活結構處理非結構化資料。
+用 **PostgreSQL** 配 **PgBouncer** 連線池，搭配 `asyncpg` 批量寫入，減少連線開銷。如果用 **MongoDB**，則靠無模式結構處理靈活資料。
 
 **程式碼**（`celery_workers/app/tasks.py`）：
 ```python
@@ -413,24 +439,24 @@ async def _store_data_async(data_items: list):
             ON CONFLICT (url) DO UPDATE
             SET content = EXCLUDED.content, ...
         ''', [(item['url'], item['content'], item['crawled_at'], ...) for item in data_items])
-    print(f"存了 {len(data_items)} 條資料")
+    print(f"批量寫入 {len(data_items)} 條資料")
 ```
 
-**做法**：
+**優化技巧**：
 - PgBouncer 設 `MAX_CLIENT_CONNECTIONS=1000`，`DEFAULT_POOL_SIZE=50`。
-- 用 `ON CONFLICT` 去重，省查詢時間。
+- 用 `ON CONFLICT` 處理去重，省查詢。
 - 在 `url` 欄位加唯一索引。
-- MongoDB 則可考慮分片，處理超大資料量。
+- MongoDB 可考慮分片，處理超大資料量。
 
 ---
 
-### Q3: 怎麼躲網站的反爬蟲？
+### Q3: 怎麼應對網站反爬蟲？
 
-專案有幾招防反爬：
+系統內建三招：
 
-1. **代理池**：`proxy_manager.py` 定期從 API 抓代理，存 Redis，自動檢查健康。
-2. **User-Agent**：用 `fake-useragent` 隨機換。
-3. **CAPTCHA**：支援 2Captcha，預留解析邏輯。
+1. **動態代理池**：`proxy_manager.py` 定期從 API 抓代理，存 Redis，自動剔除無效代理。
+2. **隨機 User-Agent**：用 `fake-useragent` 模擬不同瀏覽器。
+3. **CAPTCHA 支援**：預留 2Captcha 處理，針對 403/429 錯誤。
 
 **程式碼**（`fastapi_crawler/app/crawler.py`）：
 ```python
@@ -450,38 +476,41 @@ async def get_proxy():
     return None
 ```
 
-**建議**：
-- 設隨機延遲（0.1-1.0 秒）。
-- 未來加 Playwright 抓動態頁面：
+**進階建議**：
+- 隨機延遲 0.1-1.0 秒，模擬人類行為。
+- 加 Playwright 處理動態頁面：
   ```yaml
   playwright:
     image: mcr.microsoft.com/playwright:v1.39.0
+    networks:
+      - crawler_network
   ```
 
 ---
 
-### Q4: 怎麼看系統跑得順不順？
+### Q4: 怎麼知道系統跑得好不好？
 
-專案整合了幾個監控工具：
+專案整合了專業監控工具：
 
-- **Prometheus**：`http://localhost:9090`，看 QPS、延遲、代理數。
-- **Grafana**：`http://localhost:3000`（`admin/admin`），畫圖表。
-- **Celery Flower**：`http://localhost:5555`，查任務狀態。
+- **Prometheus**：`http://localhost:9090`，追蹤 QPS、延遲、代理數。
+- **Grafana**：`http://localhost:3000`（`admin/admin`），畫出效能圖表。
+- **Celery Flower**：`http://localhost:5555`，看任務執行狀況。
+- **ELK Stack**（可選）：改 `docker-compose.yml`，用 Kibana (`http://localhost:5601`) 查日誌。
 
-**調優**：
-- 加 FastAPI worker：`gunicorn -w 16`。
-- 調 Celery 並發：`--concurrency=500 -P gevent`。
-- 用 Locust 壓力測試，找瓶頸。
+**調優建議**：
+- 調 FastAPI：`gunicorn -w 16`。
+- 調 Celery：`--concurrency=500 -P gevent`。
+- 用 Locust 找瓶頸。
 
 ---
 
-### Q5: 為啥用 gRPC 連 Laravel 跟 FastAPI？
+### Q5: 為啥用 gRPC 連 Laravel 和 FastAPI？
 
-gRPC 比 REST 快，適合內部高頻通信：
+gRPC 用 HTTP/2 和 Protocol Buffers，比 REST 快 2-10 倍，適合高頻內部通信：
 
-- **高效**：用 HTTP/2 和 Protocol Buffers，序列化快。
-- **型別安全**：`crawler.proto` 定義資料結構，少出錯。
-- **擴展性**：支援雙向流，未來可加即時回饋。
+- **高效**：低序列化開銷，支援高 QPS。
+- **型別安全**：`crawler.proto` 定義結構，減少 bug。
+- **未來擴展**：支援雙向流，可加即時狀態回饋。
 
 **程式碼**（`laravel_api/app/Grpc/CrawlerServiceClient.php`）：
 ```php
@@ -494,16 +523,16 @@ $requestProto->setTaskId($taskId);
 list($response, $status) = $client->Crawl($requestProto)->wait();
 ```
 
-**啥時用 REST**？如果跨語言或快速試驗，REST 簡單點，但 gRPC 更適合這專案的高性能需求。
+**啥時用 REST**？快速原型或跨語言時，REST 簡單，但 gRPC 更適合高性能場景。
 
 ---
 
-### Q6: 任務掛了怎麼辦？
+### Q6: 任務失敗怎麼處理？
 
-專案用 Celery 的重試機制和 Redis 狀態追蹤處理失敗：
+用 **Celery** 的重試機制和 **Redis** 狀態追蹤：
 
-- **重試**：`store_data_task` 設 `max_retries=5`，失敗後等 300 秒再試。
-- **狀態**：失敗時更新 Redis 的 `crawl_task_status:{taskId}`。
+- **重試**：任務失敗後等 300 秒重試，最多 5 次。
+- **狀態管理**：失敗記到 Redis，方便除錯。
 
 **程式碼**（`celery_workers/app/tasks.py`）：
 ```python
@@ -525,9 +554,9 @@ def store_data_task(self, url: str, content: str, task_id: str = None):
         raise self.retry(exc=e)
 ```
 
-**小技巧**：
-- 設合理的 `default_retry_delay`，別讓重試把系統壓垮。
-- 錯誤記到 Redis，方便 debug。
+**小訣竅**：
+- 調整 `default_retry_delay` 避免過度重試。
+- Redis 狀態方便查問題根因。
 
 ---
 
@@ -536,33 +565,29 @@ def store_data_task(self, url: str, content: str, task_id: str = None):
 - **Prometheus**：`http://localhost:9090`。
 - **Grafana**：`http://localhost:3000`（`admin/admin`）。
 - **Celery Flower**：`http://localhost:5555`。
-- **ELK Stack**（可選）：改 `docker-compose.yml`，用 `http://localhost:5601`。
+- **ELK Stack**（可選）：`http://localhost:5601`。
 
 ---
 
-## ⚙️ 怎麼跑更快
+## ⚙️ 性能優化
 
 想衝 **10,000 QPS**：
-- FastAPI：`gunicorn -w 16`。
+- FastAPI：`gunicorn -k uvicorn.workers.UvicornWorker -w 16`。
 - Celery：`--concurrency=500 -P gevent`。
-- 代理：設真實 `PROXY_API_URL`，保持 100-200 個代理。
-- 測效能：
+- 代理：用真實 API（如 98IP），保持 100-200 代理。
+- 壓力測試：
   ```bash
   locust -f locustfile.py
   ```
 
 ---
 
-## 🔐 反爬蟲招數
+## 🔐 反爬蟲策略
 
-- **代理**：`proxy_manager.py` 管 Redis 代理池。
+- **代理池**：`proxy_manager.py` 動態更新 Redis。
 - **User-Agent**：`fake-useragent` 隨機化。
 - **CAPTCHA**：支援 2Captcha。
-- **進階**：加 Playwright：
-  ```yaml
-  playwright:
-    image: mcr.microsoft.com/playwright:v1.39.0
-  ```
+- **進階**：加 Playwright 處理動態頁面。
 
 ---
 
@@ -570,7 +595,7 @@ def store_data_task(self, url: str, content: str, task_id: str = None):
 
 ```plaintext
 high_qps_crawler/
-├── laravel_api/               # Laravel API
+├── laravel_api/               # Laravel API 核心
 │   ├── app/
 │   │   ├── Http/Controllers/CrawlerController.php
 │   │   ├── Grpc/CrawlerServiceClient.php
@@ -579,7 +604,7 @@ high_qps_crawler/
 │   ├── database/migrations/
 │   ├── docker/
 │   └── Dockerfile
-├── fastapi_crawler/           # FastAPI 爬蟲
+├── fastapi_crawler/           # FastAPI 爬蟲核心
 │   ├── app/
 │   │   ├── crawler.py
 │   │   ├── grpc_server.py
@@ -594,23 +619,22 @@ high_qps_crawler/
 │   │   ├── celery_app.py
 │   ├── requirements.txt
 │   └── Dockerfile
-├── monitoring/                # 監控
+├── monitoring/                # 監控配置
 │   ├── prometheus.yml
 │   └── logstash.conf
-├── redis_data/                # Redis 資料
-├── data_storage/              # 資料庫
+├── redis_data/                # Redis 持久化
+├── data_storage/              # 資料庫持久化
 │   ├── mongodb_data/
 │   └── postgresql_data/
-└── docker-compose.yml         # Docker Compose
+└── docker-compose.yml         # Docker Compose 配置
 ```
 
 ---
 
-## 🤝 想幫忙？
+## 🤝 貢獻方式
 
-1. Fork 這專案。
+1. Fork 專案。
 2. 開分支：`git checkout -b feature/你的功能`。
 3. 提交：`git commit -m '加了啥啥'`。
-4. 推上去：`git push origin feature/你的功能`。
+4. 推送：`git push origin feature/你的功能`。
 5. 開 Pull Request。
-
