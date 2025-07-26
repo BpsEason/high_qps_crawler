@@ -1,0 +1,16 @@
+fastapi
+uvicorn[standard]
+grpcio
+grpcio-tools
+aiohttp
+httpx
+redis
+celery
+fake-useragent
+python-dotenv # For loading environment variables (e.g., CAPTCHA_KEY)
+twocaptcha # Uncomment if you plan to use 2Captcha for CAPTCHA solving
+motor # for MongoDB
+asyncpg # for PostgreSQL
+prometheus_client # For exposing metrics
+gunicorn # For running multiple Uvicorn workers
+# gevent # For Celery worker pool if desired, or eventlet

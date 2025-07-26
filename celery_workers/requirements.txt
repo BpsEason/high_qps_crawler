@@ -1,0 +1,8 @@
+celery[redis]
+redis
+motor # for MongoDB
+asyncpg # for PostgreSQL
+# For Celery worker pools
+eventlet
+gevent
+psycopg2-binary # For PostgreSQL when using asyncpg

@@ -1,0 +1,18 @@
+syntax = "proto3";
+
+package crawler;
+
+service CrawlerService {
+  rpc Crawl (CrawlRequest) returns (CrawlResponse);
+}
+
+message CrawlRequest {
+  string url = 1;
+  string task_id = 2; // Added task_id to gRPC request
+}
+
+message CrawlResponse {
+  string status = 1;
+  string content = 2;
+  string error = 3;
+}
